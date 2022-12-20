@@ -16,6 +16,13 @@ use function openssl_verify;
 
 abstract class OpenSSL extends BaseSigner
 {
+    private $phpVersion8 = false;
+
+    public function __construct()
+    {
+        $this->phpVersion8 = ((integer)explode('.', phpversion())[0] === 8);
+    }
+
     public function createHash($payload, Key $key)
     {
         $privateKey = $this->getPrivateKey($key->getContent(), $key->getPassphrase());
@@ -31,7 +38,9 @@ abstract class OpenSSL extends BaseSigner
 
             return $signature;
         } finally {
-            openssl_free_key($privateKey);
+            if (!$this->phpVersion8) {
+                openssl_free_key($privateKey);
+            }
         }
     }
 
@@ -59,7 +68,10 @@ abstract class OpenSSL extends BaseSigner
     {
         $publicKey = $this->getPublicKey($key->getContent());
         $result    = openssl_verify($payload, $expected, $publicKey, $this->getAlgorithm());
-        openssl_free_key($publicKey);
+
+        if (!$this->phpVersion8) {
+            openssl_free_key($publicKey);
+        }
 
         return $result === 1;
     }
@@ -86,7 +98,7 @@ abstract class OpenSSL extends BaseSigner
      */
     private function validateKey($key)
     {
-        if (! is_resource($key)) {
+        if (($this->phpVersion8 && $key === false) || (!$this->phpVersion8 && !is_resource($key))) {
             throw new InvalidArgumentException(
                 'It was not possible to parse your key, reason: ' . openssl_error_string()
             );
